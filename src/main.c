@@ -51,6 +51,7 @@ int main(const int argc, const char** argv) {
 
     int i = 0;
     for (double y = 0; y < 1.0; y += y_step) {
+        printf("Scanlines remaining: %d\n", IMAGE_HEIGHT - (int)(y * IMAGE_HEIGHT));
         for (double x = 0; x < 1.0; x += x_step, i += 3) {
             image[i] = (uint8_t)(x * 255.999);
             image[i + 1] = (uint8_t)(y * 255.999);
@@ -58,7 +59,11 @@ int main(const int argc, const char** argv) {
         }
     }
 
-    stbi_write_png(IMAGE_FILENAME, IMAGE_WIDTH, IMAGE_HEIGHT, 3, image, IMAGE_WIDTH * 3 * sizeof(*image));
+    printf("Writing png...");
+    if (!stbi_write_png(IMAGE_FILENAME, IMAGE_WIDTH, IMAGE_HEIGHT, 3, image, IMAGE_WIDTH * 3 * sizeof(*image))) {
+        printf(" Failed to write png.\n");
+    }
+    printf(" Done.\n");
 
     free(image);
     return EXIT_SUCCESS;
