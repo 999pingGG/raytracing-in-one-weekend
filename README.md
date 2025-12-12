@@ -1,0 +1,2 @@
+# Raytracing in one weekend
+My own attempt at [Ray Tracing in One Weekend](https://raytracing.github.io/books/RayTracingInOneWeekend.html), using C. The goal is researching a way to have some form of very cheap realtime ray tracing for mobile GPUs. I might fail miserably to meet all of my performance and feature goals, but it could be that the real realtime ray tracing is the friends we made along the way.
