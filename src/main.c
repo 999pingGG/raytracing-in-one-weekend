@@ -4,14 +4,61 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <cvkm.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
-#define IMAGE_WIDTH 256
-#define IMAGE_HEIGHT 256
+#define IMAGE_WIDTH 400
+#define ASPECT_RATIO ((real_t)(16.0 / 9.0))
+#define IMAGE_HEIGHT ((int)(IMAGE_WIDTH / ASPECT_RATIO))
+#define FOCAL_LENGTH ((real_t)1)
+#define VIEWPORT_HEIGHT ((real_t)2)
+#define VIEWPORT_WIDTH (VIEWPORT_HEIGHT * ((real_t)IMAGE_WIDTH / IMAGE_HEIGHT))
+#define CAMERA_CENTER CVKM_DVEC3_ZERO
+#define PIXEL_DELTA_U (VIEWPORT_WIDTH / IMAGE_WIDTH)
+#define PIXEL_DELTA_V (-VIEWPORT_HEIGHT / IMAGE_HEIGHT)
+#define VIEWPORT_UPPER_LEFT ((point3_t){ { \
+    CAMERA_CENTER.x - VIEWPORT_WIDTH / (real_t)2, \
+    CAMERA_CENTER.y + VIEWPORT_HEIGHT / (real_t)2, \
+    CAMERA_CENTER.z + FOCAL_LENGTH, \
+} })
+#define PIXEL00_LOCATION ((point3_t){ { \
+    VIEWPORT_UPPER_LEFT.x + (real_t)0.5 * PIXEL_DELTA_U, \
+    VIEWPORT_UPPER_LEFT.y + (real_t)0.5 * PIXEL_DELTA_V, \
+    VIEWPORT_UPPER_LEFT.z, \
+} })
+
 #define IMAGE_FILENAME "output.png"
 
 typedef double real_t;
+typedef vkm_dvec3 point3_t;
+typedef vkm_dvec3 color_t;
+
+typedef struct ray_t {
+    point3_t origin;
+    vkm_dvec3 direction;
+} ray_t;
+
+static_assert(IMAGE_HEIGHT >= 1, "Make the image wider!");
+
+static void ray_at(const ray_t* ray, const real_t t, point3_t* result) {
+    vkm_mul(&ray->direction, t, result);
+    vkm_add(&ray->origin, result, result);
+}
+
+static void ray_color(const ray_t* ray, color_t* color) {
+    vkm_dvec3 normalized;
+    vkm_normalize(&ray->direction, &normalized);
+
+    const real_t a = (real_t)0.5 * (normalized.y + (real_t)1.0);
+
+    color_t from = { { (real_t)1.0, (real_t)1.0, (real_t)1.0 } };
+    vkm_mul(&from, (real_t)1.0 - a, &from);
+    color_t to = { { (real_t)0.5, (real_t)0.7, (real_t)1.0 } };
+    vkm_mul(&to, a, &to);
+
+    vkm_add(&from, &to, color);
+}
 
 // Unused, but since I have already written this correctly first try,
 // I'm going to leave this as a testament of my skill, or luck.
@@ -40,22 +87,33 @@ static bool write_ppm(const char* filename, const int width, const int height, c
     return true;
 }
 
+static void write_color(uint8_t* image, const color_t* color) {
+    image[0] = (uint8_t)(color->r * 255.999);
+    image[1] = (uint8_t)(color->g * 255.999);
+    image[2] = (uint8_t)(color->b * 255.999);
+}
+
 int main(const int argc, const char** argv) {
     (void)argc;
     (void)argv;
 
-    static const real_t x_step = 1.0 / (IMAGE_WIDTH - 1);
-    static const real_t y_step = 1.0 / (IMAGE_HEIGHT - 1);
-
     uint8_t* image = malloc(IMAGE_WIDTH * IMAGE_HEIGHT * 3 * sizeof(*image));
 
     int i = 0;
-    for (double y = 0; y < 1.0; y += y_step) {
-        printf("Scanlines remaining: %d\n", IMAGE_HEIGHT - (int)(y * IMAGE_HEIGHT));
-        for (double x = 0; x < 1.0; x += x_step, i += 3) {
-            image[i] = (uint8_t)(x * 255.999);
-            image[i + 1] = (uint8_t)(y * 255.999);
-            image[i + 2] = 0;
+    for (int y = 0; y < IMAGE_HEIGHT; y++) {
+        printf("Scanlines remaining: %d\n", IMAGE_HEIGHT - y);
+        for (int x = 0; x < IMAGE_WIDTH; x++, i += 3) {
+            point3_t pixel_center = PIXEL00_LOCATION;
+            pixel_center.x += x * PIXEL_DELTA_U;
+            pixel_center.y += y * PIXEL_DELTA_V;
+
+            ray_t ray;
+            ray.origin = CAMERA_CENTER;
+            vkm_sub(&pixel_center, &ray.origin, &ray.direction);
+
+            color_t color;
+            ray_color(&ray, &color);
+            write_color(&image[i], &color);
         }
     }
 
